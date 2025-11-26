@@ -1,16 +1,22 @@
 {
   "manifest_version": 3,
-  "name": "StreamScore: Movie Ratings",
+  "name": "StreamScore",
   "version": "1.0",
-  "description": "Get IMDb, Rotten Tomatoes, and Metacritic scores on streaming sites.",
+  "description": "See IMDb, Rotten Tomatoes, and Metacritic ratings on Netflix & Prime.",
   "permissions": ["activeTab", "scripting"],
   "action": {
-    "default_popup": "popup.html",
-    "default_icon": "icon.png"
+    "default_popup": "popup.html"
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "*://*.netflix.com/*",
+        "*://*.amazon.com/*",
+        "*://*.primevideo.com/*",
+        "*://*.disneyplus.com/*",
+        "*://*.hulu.com/*",
+        "*://*.max.com/*"
+      ],
       "js": ["content.js"]
     }
   ]

@@ -1,75 +1,217 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="UTF-8" />
+    <title>StreamScore</title>
     <style>
       body {
-        width: 320px;
-        background-color: #141414;
+        width: 300px;
+        background-color: #141414; /* Dark Background */
         color: #fff;
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
         padding: 15px;
         margin: 0;
       }
+
       h2 {
-        margin-top: 0;
+        text-align: center;
+        color: #e50914; /* Netflix Red */
+        margin: 0 0 15px 0;
         font-size: 18px;
-        text-align: center;
-        border-bottom: 1px solid #333;
-        padding-bottom: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
       }
+
+      .hidden {
+        display: none !important;
+      }
+
+      /* Loading Spinner */
+      .spinner {
+        border: 3px solid #333;
+        border-top: 3px solid #e50914;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        animation: spin 1s linear infinite;
+        margin: 20px auto;
+      }
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
       .movie-title {
-        font-size: 16px;
-        font-weight: bold;
         text-align: center;
-        margin-bottom: 15px;
-        color: #e50914;
+        font-size: 16px;
+        margin-bottom: 20px;
+        line-height: 1.4;
+        font-weight: 600;
       }
-      .ratings-container {
+
+      /* Rating Rows */
+      .rating-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        background: #222;
+        background: #262626;
+        padding: 12px;
+        margin-bottom: 8px;
+        border-radius: 6px;
+      }
+
+      .source {
+        font-size: 13px;
+        color: #aaa;
+        font-weight: 500;
+      }
+
+      .value {
+        font-weight: bold;
+        font-size: 16px;
+      }
+
+      /* Colors */
+      .imdb {
+        color: #f5c518;
+      }
+      .rt {
+        color: #fa320a;
+      }
+      .meta {
+        color: #66cc33;
+      }
+
+      .error {
+        color: #ff6b6b;
+        text-align: center;
+        font-size: 14px;
+        background: #2a1010;
         padding: 10px;
         border-radius: 5px;
-      }
-      .source-name {
-        font-weight: 600;
-      }
-      .score {
-        font-weight: bold;
-        color: #46d369;
-      }
-      .loading {
-        text-align: center;
-        color: #999;
-        font-style: italic;
-      }
-      .hidden {
-        display: none;
       }
     </style>
   </head>
   <body>
     <h2>StreamScore</h2>
-    <div id="loading" class="loading">Scanning page...</div>
-    <div id="content" class="hidden">
-      <div class="movie-title" id="title-display">Movie Title</div>
 
-      <div class="ratings-container">
-        <div class="rating-row">
-          <span class="source-name">IMDb</span>
-          <span class="score" id="imdb-score">---</span>
-        </div>
-        <div class="ratings-row">
-          <span class="source-name">Rotten Tomatoes</span>
-          <span class="score" id="rt-score">---</span>
-        </div>
-        <div class="ratings-row">
-          <span class="source-name">Metacritic</span>
-          <span class="score" id="meta-score">---</span>
-        </div>
+    <!-- STATE: LOADING -->
+    <div id="loading">
+      <div class="spinner"></div>
+      <div style="text-align: center; color: #999; font-size: 12px">
+        Scanning Page...
       </div>
     </div>
-    <script src="popup.js"></script>
+
+    <!-- STATE: RESULTS -->
+    <div id="results" class="hidden">
+      <div id="title-display" class="movie-title">Movie Title</div>
+
+      <div class="rating-row">
+        <span class="source">IMDb</span>
+        <span id="imdb-val" class="value imdb">--</span>
+      </div>
+
+      <div class="rating-row">
+        <span class="source">Rotten Tomatoes</span>
+        <span id="rt-val" class="value rt">--</span>
+      </div>
+
+      <div class="rating-row">
+        <span class="source">Metacritic</span>
+        <span id="meta-val" class="value meta">--</span>
+      </div>
+    </div>
+
+    <!-- STATE: ERROR -->
+    <div id="error" class="hidden error">No movie found.</div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+      // ==========================================
+      // CONFIGURATION: PASTE YOUR VERCEL URL BELOW
+      // Example: const API_URL = "https://streamscore.vercel.app/api";
+      // ==========================================
+      const API_URL = "REPLACE_WITH_YOUR_VERCEL_URL/api";
+
+      document.addEventListener("DOMContentLoaded", async () => {
+        const loading = document.getElementById("loading");
+        const results = document.getElementById("results");
+        const errorDiv = document.getElementById("error");
+        const titleDisplay = document.getElementById("title-display");
+
+        try {
+          // 1. Get the current browser tab
+          const [tab] = await chrome.tabs.query({
+            active: true,
+            currentWindow: true,
+          });
+
+          // 2. Send message to content.js to scrape title
+          chrome.tabs.sendMessage(
+            tab.id,
+            { action: "getMovieTitle" },
+            async (response) => {
+              // 3. Handle if no title found (e.g. user is on Google, not Netflix)
+              if (!response || !response.title) {
+                loading.classList.add("hidden");
+                errorDiv.classList.remove("hidden");
+                errorDiv.innerText = "No movie detected on this page.";
+                return;
+              }
+
+              titleDisplay.innerText = response.title;
+
+              // 4. Fetch ratings from your Vercel Proxy
+              try {
+                // Check if user forgot to update the URL
+                if (API_URL.includes("REPLACE_WITH")) {
+                  throw new Error(
+                    "Setup Error: Please open popup.html and add your Vercel URL."
+                  );
+                }
+
+                const res = await fetch(
+                  `${API_URL}?title=${encodeURIComponent(response.title)}`
+                );
+                const data = await res.json();
+
+                if (data.Error) throw new Error(data.Error);
+
+                // 5. Update the UI
+                const getVal = (src) =>
+                  data.Ratings?.find((r) => r.Source === src)?.Value || "N/A";
+
+                document.getElementById("imdb-val").innerText = getVal(
+                  "Internet Movie Database"
+                );
+                document.getElementById("rt-val").innerText =
+                  getVal("Rotten Tomatoes");
+                document.getElementById("meta-val").innerText =
+                  getVal("Metacritic");
+
+                // Show Results
+                loading.classList.add("hidden");
+                results.classList.remove("hidden");
+              } catch (err) {
+                loading.classList.add("hidden");
+                errorDiv.classList.remove("hidden");
+                errorDiv.innerText = err.message;
+              }
+            }
+          );
+        } catch (err) {
+          // Fallback for general extension errors
+          loading.classList.add("hidden");
+          errorDiv.classList.remove("hidden");
+          errorDiv.innerText = "Please refresh the page and try again.";
+        }
+      });
+    </script>
   </body>
 </html>

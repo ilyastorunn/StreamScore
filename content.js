@@ -1,23 +1,28 @@
-// Listen for messages from the popup
+// content.js - Runs on the Netflix/Prime page
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "getMovieTitle") {
-    // Attempt to find the title using the OpenGraph tag (standart on Netflix/Prime/Disney)
-    const metaTag = document.querySelector('meta[property="og:title"]');
+    // STRATEGY 1: Open Graph Tag (Used by Netflix, Disney+, Hulu)
+    // <meta property="og:title" content="Inception - Netflix">
+    const ogTitle = document.querySelector('meta[property="og:title"]');
 
-    if (metaTag) {
-      const rawTitle = metaTag.textContent;
-      console.log("StreamScore fount raw title:", rawTitle);
+    // STRATEGY 2: Document Title (Used by Prime Video)
+    // <title>Watch The Boys | Prime Video</title>
+    let title = ogTitle ? ogTitle.content : document.title;
 
-      // Clean the title: Remove " - Netflix", " | Prime Video", etc.
-      //This regex looks for " - " or " | " followed by text at the end of the string
-      const cleanTitle = rawTitle.replace(/ [-|] .*/, "").trim();
-
-      sendResponse({ title: cleanTitle });
-    } else {
-      // Fallback: Try getting the standart document title
-      const fallbackTitle = document.title.replace(/ [-|] .*/, "").trim();
-      sendResponse({ title: fallbackTitle || null });
+    if (title) {
+      // CLEANUP: Remove " - Netflix", " | Prime Video", Season numbers, etc.
+      title = title
+        .replace(/ - Netflix$/, "")
+        .replace(/ \| Prime Video$/, "")
+        .replace(/ \| Disney\+$/, "")
+        .replace(/ \| Hulu$/, "")
+        .replace(/^Watch /, "") // Amazon sometimes says "Watch Matrix..."
+        .split(" Season")[0] // Remove " Season 1" for TV shows to get general rating
+        .trim();
     }
+
+    sendResponse({ title: title });
   }
-  return true; // Keeps the message channel open for async response
+  return true; // Keep connection open
 });
