@@ -164,61 +164,108 @@
               // Check for Chrome runtime error
               if (chrome.runtime.lastError) {
                 console.log("Chrome runtime error:", chrome.runtime.lastError);
-                loading.classList.add("hidden");
-                errorDiv.classList.remove("hidden");
-                errorDiv.innerText = "Content script not loaded. Are you on a supported streaming site?";
+                
+                // Fallback: Try to inject content script programmatically
+                try {
+                  await chrome.scripting.executeScript({
+                    target: { tabId: tab.id },
+                    files: ['content.js']
+                  });
+                  
+                  // Wait a bit then try again
+                  setTimeout(() => {
+                    chrome.tabs.sendMessage(
+                      tab.id,
+                      { action: "getMovieTitle" },
+                      (fallbackResponse) => {
+                        if (chrome.runtime.lastError) {
+                          loading.classList.add("hidden");
+                          errorDiv.classList.remove("hidden");
+                          errorDiv.innerText = "Content script failed to load. Reload the page and try again.";
+                          return;
+                        }
+                        
+                        if (!fallbackResponse || !fallbackResponse.title) {
+                          loading.classList.add("hidden");
+                          errorDiv.classList.remove("hidden");
+                          errorDiv.innerText = "No movie detected on this page.";
+                          return;
+                        }
+                        
+                        // Process the response...
+                        processResponse(fallbackResponse);
+                      }
+                    );
+                  }, 500);
+                  
+                } catch (injectionError) {
+                  console.log("Script injection failed:", injectionError);
+                  loading.classList.add("hidden");
+                  errorDiv.classList.remove("hidden");
+                  errorDiv.innerText = "Failed to inject content script. Are you on a supported site?";
+                }
                 return;
               }
               
-              // 3. Handle if no title found (e.g. user is on Google, not Netflix)
-              if (!response || !response.title) {
-                console.log("No title found, showing error");
-                loading.classList.add("hidden");
-                errorDiv.classList.remove("hidden");
-                errorDiv.innerText = "No movie detected on this page.";
-                return;
-              }
-
-              titleDisplay.innerText = response.title;
-
-              // 4. Fetch ratings from your Vercel Proxy
-              try {
-                // Check if user forgot to update the URL
-                if (API_URL.includes("REPLACE_WITH")) {
-                  throw new Error(
-                    "Setup Error: Please open popup.html and add your Vercel URL."
-                  );
-                }
-
-                const res = await fetch(
-                  `${API_URL}?title=${encodeURIComponent(response.title)}`
-                );
-                const data = await res.json();
-
-                if (data.Error) throw new Error(data.Error);
-
-                // 5. Update the UI
-                const getVal = (src) =>
-                  data.Ratings?.find((r) => r.Source === src)?.Value || "N/A";
-
-                document.getElementById("imdb-val").innerText = getVal(
-                  "Internet Movie Database"
-                );
-                document.getElementById("rt-val").innerText =
-                  getVal("Rotten Tomatoes");
-                document.getElementById("meta-val").innerText =
-                  getVal("Metacritic");
-
-                // Show Results
-                loading.classList.add("hidden");
-                results.classList.remove("hidden");
-              } catch (err) {
-                loading.classList.add("hidden");
-                errorDiv.classList.remove("hidden");
-                errorDiv.innerText = err.message;
-              }
+              // Process successful response
+              processResponse(response);
             }
           );
+          
+          // Helper function to process the response
+          function processResponse(response) {
+            if (!response || !response.title) {
+              console.log("No title found, showing error");
+              loading.classList.add("hidden");
+              errorDiv.classList.remove("hidden");
+              errorDiv.innerText = "No movie detected on this page.";
+              return;
+            }
+
+            titleDisplay.innerText = response.title;
+
+            // 4. Fetch ratings from your Vercel Proxy
+            fetchRatings(response.title);
+          }
+          
+          // Helper function to fetch ratings
+          async function fetchRatings(title) {
+            try {
+              // Check if user forgot to update the URL
+              if (API_URL.includes("REPLACE_WITH")) {
+                throw new Error(
+                  "Setup Error: Please open popup.html and add your Vercel URL."
+                );
+              }
+
+              const res = await fetch(
+                `${API_URL}?title=${encodeURIComponent(title)}`
+              );
+              const data = await res.json();
+
+              if (data.Error) throw new Error(data.Error);
+
+              // 5. Update the UI
+              const getVal = (src) =>
+                data.Ratings?.find((r) => r.Source === src)?.Value || "N/A";
+
+              document.getElementById("imdb-val").innerText = getVal(
+                "Internet Movie Database"
+              );
+              document.getElementById("rt-val").innerText =
+                getVal("Rotten Tomatoes");
+              document.getElementById("meta-val").innerText =
+                getVal("Metacritic");
+
+              // Show Results
+              loading.classList.add("hidden");
+              results.classList.remove("hidden");
+            } catch (err) {
+              loading.classList.add("hidden");
+              errorDiv.classList.remove("hidden");
+              errorDiv.innerText = err.message;
+            }
+          }
         } catch (err) {
           // Fallback for general extension errors
           loading.classList.add("hidden");
