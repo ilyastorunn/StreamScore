@@ -1,10 +1,15 @@
 // content.js - Runs on the Netflix/Prime page
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  console.log("Message received in content script:", request);
+  
   if (request.action === "getMovieTitle") {
     // STRATEGY 1: Open Graph Tag (Used by Netflix, Disney+, Hulu)
     // <meta property="og:title" content="Inception - Netflix">
     const ogTitle = document.querySelector('meta[property="og:title"]');
+    
+    console.log("OG title found:", ogTitle ? ogTitle.content : "none");
+    console.log("Document title:", document.title);
 
     // STRATEGY 2: Document Title (Used by Prime Video)
     // <title>Watch The Boys | Prime Video</title>
@@ -22,6 +27,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         .trim();
     }
 
+    console.log("Final title to send:", title);
     sendResponse({ title: title });
   }
   return true; // Keep connection open

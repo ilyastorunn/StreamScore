@@ -151,14 +151,28 @@
             active: true,
             currentWindow: true,
           });
+          
+          console.log("Current tab:", tab.url);
 
           // 2. Send message to content.js to scrape title
           chrome.tabs.sendMessage(
             tab.id,
             { action: "getMovieTitle" },
             async (response) => {
+              console.log("Response received:", response);
+              
+              // Check for Chrome runtime error
+              if (chrome.runtime.lastError) {
+                console.log("Chrome runtime error:", chrome.runtime.lastError);
+                loading.classList.add("hidden");
+                errorDiv.classList.remove("hidden");
+                errorDiv.innerText = "Content script not loaded. Are you on a supported streaming site?";
+                return;
+              }
+              
               // 3. Handle if no title found (e.g. user is on Google, not Netflix)
               if (!response || !response.title) {
+                console.log("No title found, showing error");
                 loading.classList.add("hidden");
                 errorDiv.classList.remove("hidden");
                 errorDiv.innerText = "No movie detected on this page.";
